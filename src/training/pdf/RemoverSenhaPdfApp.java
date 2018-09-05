@@ -1,8 +1,6 @@
 package training.pdf;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 
 import javax.swing.JFileChooser;
@@ -11,57 +9,46 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 
-import com.itextpdf.text.DocumentException;
-import com.itextpdf.text.exceptions.BadPasswordException;
-import com.itextpdf.text.pdf.PdfReader;
-import com.itextpdf.text.pdf.PdfStamper;
-import com.itextpdf.text.pdf.PdfWriter;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 import training.pdf.enums.FileOptions;
 
 public class RemoverSenhaPdfApp {
 
-	private static final String TITULO_ARQUIVO_INVALIDO = "Alerta";
+	private static final String TITULO_ERRO = "Erro";
 	private static final String ARQUIVO_INVALIDO = "O arquivo fornecido não é uma arquivo PDF válido ou está corrompido.";
-	private static final String TITULO_ARQUIVO_NAO_CRIPTO = "Erro";
-	private static final String ARQUIVO_NAO_CRIPTO = "O arquivo PDF fornecido não está seguro por senha.";
+	private static final String TITULO_AVISO = "Aviso";
+	private static final String ARQUIVO_NAO_CRIPTO = "O arquivo PDF fornecido não está encriptado por senha.";
+	private static final String SENHA_INCORRETA = "Senha informada não é valida. Tente novamente";
 
 	public static void main(String[] args) {
-		try {
-
-			File readPdf = openSavePdfFile(FileOptions.OPEN);
-
-			PdfReader.unethicalreading = true;
-			PdfReader pdfReader;
-
-			String senha = passwordInputPanel();
-
-			pdfReader = new PdfReader(new FileInputStream(readPdf), senha.getBytes());
-
-			File file = openSavePdfFile(FileOptions.SAVE);
-			PdfStamper stamper = new PdfStamper(pdfReader, new FileOutputStream(file));
-			stamper.setEncryption(false, null, null, PdfWriter.ALLOW_PRINTING);
-			stamper.close();
-			pdfReader.close();
-
-		} catch (IOException | DocumentException e) {
-			if (e instanceof BadPasswordException) {
-				JOptionPane.showMessageDialog(null, ARQUIVO_NAO_CRIPTO, TITULO_ARQUIVO_NAO_CRIPTO,
-						JOptionPane.WARNING_MESSAGE);
+		File readPdf = openSavePdfFile(FileOptions.OPEN);
+		try (PDDocument pdDocument = PDDocument.load(readPdf)) {
+			JOptionPane.showMessageDialog(null, ARQUIVO_NAO_CRIPTO, TITULO_AVISO, JOptionPane.WARNING_MESSAGE);
+		} catch (IOException ex) {
+			if (ex instanceof InvalidPasswordException) {
+				while (true) {
+					String senha = passwordInputPanel();
+					try (PDDocument pdDocument = PDDocument.load(readPdf, senha);) {
+						pdDocument.setAllSecurityToBeRemoved(true);
+						File file = openSavePdfFile(FileOptions.SAVE);
+						pdDocument.save(file);
+						System.exit(0);
+					} catch (IOException ey) {
+						JOptionPane.showMessageDialog(null, SENHA_INCORRETA, TITULO_AVISO, JOptionPane.WARNING_MESSAGE);
+					}
+				}
 			} else {
-				JOptionPane.showMessageDialog(null,
-						ARQUIVO_INVALIDO, TITULO_ARQUIVO_INVALIDO,
-						JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(null, ARQUIVO_INVALIDO, TITULO_ERRO, JOptionPane.ERROR_MESSAGE);
 			}
-			
-			e.printStackTrace();
 		}
 	}
 
 	private static File openSavePdfFile(FileOptions options) {
 		JFileChooser fileChooser = new JFileChooser();
 
-		int status = 0;
+		Integer status = 0;
 		switch (options.getValue()) {
 		case 0:
 			fileChooser.setDialogType(JFileChooser.OPEN_DIALOG);
@@ -76,8 +63,7 @@ public class RemoverSenhaPdfApp {
 			break;
 		}
 
-		switch (status) {
-		case JFileChooser.CANCEL_OPTION:
+		if (status.equals(JFileChooser.CANCEL_OPTION)) {
 			System.exit(JFileChooser.CANCEL_OPTION);
 		}
 
